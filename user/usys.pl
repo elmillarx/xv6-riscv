@@ -42,3 +42,5 @@ entry("getpid");
 entry("sbrk");
 entry("pause");
 entry("uptime");
+entry("settickets"); # T2 - 2)
+entry("getcpuslices"); # T2 - 4)

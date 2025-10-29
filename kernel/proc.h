@@ -104,4 +104,7 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+
+  int tickets; // T2 - 1) Agregar tickets
+  int cpu_slices; // T2 - 4) Agregar cpu_slices para contar veces que se eligio el proceso
 };

@@ -107,3 +107,38 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// T2 - 2) Modificar cantidad de tickets de proceso
+uint64
+sys_settickets(void)
+{
+  int n;
+  struct proc *p = myproc();
+
+  // leer directamente el argumento a0 del trapframe
+  n = (int)p->trapframe->a0;
+
+  if(n < 1)
+    n = 1;
+
+  acquire(&p->lock);
+  p->tickets = n;
+  release(&p->lock);
+
+  return 0;
+}
+
+// T2 - 4) Contabilidad y monitoreo
+uint64
+sys_getcpuslices(void)
+{
+  struct proc *p;
+  int s;
+
+  p = myproc();
+  acquire(&p->lock);
+  s = p->cpu_slices;
+  release(&p->lock);
+
+  return s;
+}

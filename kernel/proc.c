@@ -125,6 +125,9 @@ found:
   p->pid = allocpid();
   p->state = USED;
 
+  p->tickets = 100; // T2 - 1) Agregar tickets = 100
+  p->cpu_slices = 0; // T2 - 4) Agregar contador
+
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -421,44 +424,59 @@ kwait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+
 void
-scheduler(void)
+scheduler(void) // T2 - 3) Seleccion de proceso (loteria) + contabilidad
 {
   struct proc *p;
-  struct cpu *c = mycpu();
-
-  c->proc = 0;
+  static uint64 seed = 88172645463325252ULL; // semilla persistent
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting. Then turn them back off
-    // to avoid a possible race between an interrupt
-    // and wfi.
     intr_on();
-    intr_off();
-
-    int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
+    // 1) Calcular total = suma(tickets) de procesos RUNNABLE
+    int total = 0;
+    for(p = proc; p < &proc[NPROC]; p++){
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+      if(p->state == RUNNABLE){
+        if(p->tickets < 1)
+          p->tickets = 1;   // robustez: al menos 1 ticket
+        total += p->tickets;
       }
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
+
+    if(total == 0){
+      // no hay procesos RUNNABLE -> seguir ciclo
+      continue;
     }
+
+    // 2) Generar r aleatorio en [1, total]
+    seed = seed * 6364136223846793005ULL + 1442695040888963407ULL;
+    seed ^= ticks;
+    int r = (int)(seed % (uint64)total) + 1; // r en [1..total]
+
+    // 3) Recorrer procesos acumulando tickets hasta acc >= r
+    int acc = 0;
+    for(p = proc; p < &proc[NPROC]; p++){
+      acquire(&p->lock);
+      if(p->state == RUNNABLE){
+        acc += p->tickets;
+        if(acc >= r){
+          // 4) contador: mientras tenemos p->lock, incrementamos slices
+          p->cpu_slices++;
+          // ejecutar proceso seleccionado (patrón xv6)
+          mycpu()->proc = p;
+          p->state = RUNNING;
+          swtch(&mycpu()->context, &p->context);
+
+          // cuando el proceso vuelva aquí ya liberó CPU
+          mycpu()->proc = 0;
+          release(&p->lock);
+          break; // empezamos nuevo ciclo del scheduler
+        }
+      }
+      release(&p->lock);
+    }
+    // si no se encontró (ej. tickets cambiaron), el bucle se repite
   }
 }
 
