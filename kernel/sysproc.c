@@ -105,3 +105,28 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+// T3
+uint64
+sys_mrdprotect(void)
+{
+  uint64 addr;
+  int len;
+
+  argaddr(0, &addr);   // NO retornan nada
+  argint(1, &len);     // NO comparar retorno
+
+  return mrdprotect((void*)addr, len);
+}
+
+uint64
+sys_munrdprotect(void)
+{
+  uint64 addr;
+  int len;
+
+  argaddr(0, &addr);   // void, no retorna nada
+  argint(1, &len);
+
+  return munrdprotect((void*)addr, len);
+}

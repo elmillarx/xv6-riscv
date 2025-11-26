@@ -484,3 +484,93 @@ ismapped(pagetable_t pagetable, uint64 va)
   }
   return 0;
 }
+
+// T3
+int
+mrdprotect(void *addr, int len)
+{
+  if(len <= 0)
+    return -1;
+
+  uint64 va = (uint64)addr;
+
+  // verificar alineación
+  if (va % PGSIZE != 0)
+    return -1;
+
+  struct proc *p = myproc();
+
+  // límite del espacio de usuario
+  uint64 max = p->sz;
+
+  for(int i = 0; i < len; i++){
+    uint64 cur = va + i * PGSIZE;
+
+    // no permitir acceder fuera del espacio usuario
+    if(cur >= max)
+      return -1;
+
+    pte_t *pte = walk(p->pagetable, cur, 0);
+    if(pte == 0)
+      return -1;
+
+    // debe estar mapeada
+    if((*pte & PTE_V) == 0)
+      return -1;
+
+    // debe ser página de usuario
+    if((*pte & PTE_U) == 0)
+      return -1;
+
+    // remover permiso de lectura
+    *pte &= ~PTE_R;
+  }
+
+  // invalidar TLB
+  sfence_vma();
+
+  return 0;
+}
+
+int
+munrdprotect(void *addr, int len)
+{
+  if(len <= 0)
+    return -1;
+
+  uint64 va = (uint64)addr;
+
+  // verificar alineación
+  if (va % PGSIZE != 0)
+    return -1;
+
+  struct proc *p = myproc();
+  uint64 max = p->sz;
+
+  for(int i = 0; i < len; i++){
+    uint64 cur = va + i * PGSIZE;
+
+    // verificar que la dirección sea de usuario
+    if(cur >= max)
+      return -1;
+
+    pte_t *pte = walk(p->pagetable, cur, 0);
+    if(pte == 0)
+      return -1;
+
+    // PTE debe ser válida
+    if((*pte & PTE_V) == 0)
+      return -1;
+
+    // Debe ser memoria de usuario
+    if((*pte & PTE_U) == 0)
+      return -1;
+
+    // restaurar permiso de lectura
+    *pte |= PTE_R;
+  }
+
+  sfence_vma();   // invalidar TLB
+
+  return 0;
+}
